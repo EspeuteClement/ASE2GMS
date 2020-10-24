@@ -3,7 +3,7 @@
 
 -- Constants
 local popupName = "GMS Exporter (Beta)"
-local metaDataLayerName = "_GmsExport"
+local metaDataLayerName = "_ase2gms"
 
 local cantOpenYYPMsg = "Couldn't open project at path %s."
 local cantOpenSpriteYYMsg = "Couldn't open Gamemaker sprite file at path %s."
