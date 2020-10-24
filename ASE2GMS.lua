@@ -9,6 +9,19 @@ local cantOpenYYPMsg = "Couldn't open project at path %s."
 local cantOpenSpriteYYMsg = "Couldn't open Gamemaker sprite file at path %s."
 local cantParseMsg = "Couldn't parse GameMakerProject. Maybe the file is corrupted ?"
 
+local origins = {
+	"Top Left",
+	"Top Center",
+	"Top Right",
+	"Middle Left",
+	"Middle Centre",
+	"Middle Right",
+	"Bottom Left",
+	"Bottom Centre",
+	"Bottom Right",
+	"Keep"
+}
+
 
 -- Empty GMS .yy file
 
@@ -16,7 +29,7 @@ local emptyGMSyy = [[{
   "bboxMode": 0,
   "collisionKind": 1,
   "type": 0,
-  "origin": 0,
+  "origin": <<exportorigin>>,
   "preMultiplyAlpha": false,
   "edgeFiltering": false,
   "collisionTolerance": 0,
@@ -66,8 +79,8 @@ local emptyGMSyy = [[{
     "backdropHeight": 768,
     "backdropXOffset": 0.0,
     "backdropYOffset": 0.0,
-    "xorigin": 0,
-    "yorigin": 0,
+    "xorigin": <<xorigin>>,
+    "yorigin": <<yorigin>>,
     "eventToFunction": {},
     "eventStubScript": null,
     "parent": {"name":"<<spritename>>","path":"sprites/<<spritename>>/<<spritename>>.yy",},
@@ -99,6 +112,21 @@ local emptyKeyframeData = [[
             {"id":"<<keyframeid>>","Key":<<keyid>>,"Length":<<keylength>>,"Stretch":false,"Disabled":false,"IsCreationKey":false,"Channels":{"0":{"Id":{"name":"<<spriteid>>","path":"sprites/<<spritename>>/<<spritename>>.yy",},"resourceVersion":"1.0","resourceType":"SpriteFrameKeyframe",},},"resourceVersion":"1.0","resourceType":"Keyframe<SpriteFrameKeyframe>",},
 ]]
 
+function StringToSettings(str, t)
+	str:gsub("([^;]*)=([^;]*)", function(k,v)
+		t[k] = v
+	end
+	)
+	return t
+end
+
+function SettingsToString(settings)
+	local s = ""
+	for k, v in pairs(settings) do
+		s = s .. k .."="..v..";"
+	end
+	return s
+end
 
 -- Script
 math.randomseed( os.time() )
@@ -132,11 +160,12 @@ metaLayer.isVisible = false
 
 
 -- Open filedialog
-local exportProjectPath, exportSpriteName = string.match(metaLayer.data or "", "(.*);(.*)");
-
-if not exportSpriteName then
-	exportSpriteName = spr.filename:match('\\([^\\]*)%..*');
-end
+local settings = {
+	exportProjectPath = nil,
+	exportSpriteName = spr.filename:match('\\([^\\]*)%..*'),
+	exportOrigin = "0"
+}
+settings = StringToSettings(metaLayer.data, settings);
 
 local dlg = Dialog(popupName)
 
@@ -155,16 +184,23 @@ dlg:file{
 			id="exportProjectPath",
 			label="GMS Project", 
 			open = true, 
-			filename=exportProjectPath, 
+			filename=settings.exportProjectPath, 
 			filetypes={"yyp"},
-			entry=true,
+			entry=false,
 			focus=true
 		}
 
 dlg:entry{
 	id="exportSpriteName",
 	label="Sprite Name",
-	text=exportSpriteName
+	text=settings.exportSpriteName
+}
+
+dlg:combobox{
+	id="origin",
+	label="Origin",
+	option=origins[tonumber(settings.exportOrigin)+1],
+	options=origins
 }
 
 dlg:separator{}
@@ -179,8 +215,15 @@ dlg:button{
 
 dlg:show{wait = true}
 
-exportProjectPath = dlg.data.exportProjectPath
-exportSpriteName = dlg.data.exportSpriteName
+settings.exportProjectPath = dlg.data.exportProjectPath
+settings.exportSpriteName = dlg.data.exportSpriteName
+
+for k,v in ipairs(origins) do
+	if v == dlg.data.origin then
+		settings.exportOrigin = "" .. k - 1
+		break;
+	end
+end
 
 if chosenButton ~= "export" then
 	return
@@ -188,7 +231,7 @@ end
 
 -- Write files to disk
 
-metaLayer.data = exportProjectPath .. ";" .. exportSpriteName
+metaLayer.data = SettingsToString(settings)
 
 
 
@@ -242,9 +285,19 @@ function QueueCommand(cmd)
 	commands = commands .. cmd
 end
 
+function WindowsPathEscape(str)
+	return str:gsub("/","\\");
+end
+
 -- Create directory structure
 function ExportTag(spriteToExport, from, to, exportName)
-	local gmsRootDir = string.gsub(exportProjectPath, '\\[^\\]*%.yyp', "")
+	
+	-- Security to avoid creating an empty path for dirPath
+	if not exportName or exportName:len() < 1 then
+		return
+	end
+
+	local gmsRootDir = string.gsub(settings.exportProjectPath, '\\[^\\]*%.yyp', "")
 	local dirPath = gmsRootDir .. "\\sprites\\" .. exportName;
 
 	local spriteFilepath = dirPath .. "\\" .. exportName .. ".yy"
@@ -257,6 +310,25 @@ function ExportTag(spriteToExport, from, to, exportName)
 	local width = spriteToExport.width;
 	local height = spriteToExport.height;
 
+
+	local xorigin, yorigin = 0, 0
+	local origin = tonumber(settings.exportOrigin)
+	if origin % 3 == 0 then
+		xorigin = 0
+	elseif origin % 3 == 1 then
+		xorigin = math.floor(width/2)
+	else
+		xorigin = width
+	end
+
+	if math.floor(origin/3) == 0 then
+		yorigin = 0
+	elseif math.floor(origin/3) == 1 then
+		yorigin = math.floor(height/2)
+	else
+		yorigin = height
+	end
+
 	if false and spriteFile then
 		originalSpriteContent = spriteFile:read("*all");
 		spriteFile:close();
@@ -267,11 +339,15 @@ function ExportTag(spriteToExport, from, to, exportName)
 			layerid = layerUuid,
 			sequencelenght = to-from+1,
 			sprwidth = width,
-			sprheigth = height
+			sprheigth = height,
+			exportorigin = settings.exportOrigin,
+			xorigin = xorigin,
+			yorigin = yorigin
 		}
 		)
 	end
 
+	assert(dirPath:len() > 10, "Fatal error, dirPath was too short, aborting to avoid wiping your computer")
 	os.execute("rmdir /s /q " .. WindowsPathEscape(dirPath));
 	os.execute("mkdir " .. WindowsPathEscape(dirPath));
 
@@ -298,8 +374,8 @@ function ExportTag(spriteToExport, from, to, exportName)
 		local layerOutName = layerOutDir .. "\\" .. layerUuid .. ".png"
 		image:saveAs(curSpriteOutPath)
 
-		os.execute("mkdir " .. WindowsPathEscape(layerOutDir));
-		os.execute("copy /Y " .. WindowsPathEscape(curSpriteOutPath) .. " " .. WindowsPathEscape(layerOutName));
+		QueueCommand("mkdir " .. WindowsPathEscape(layerOutDir));
+		QueueCommand("copy /Y " .. WindowsPathEscape(curSpriteOutPath) .. " " .. WindowsPathEscape(layerOutName));
 
 		local data = {spriteguid = curSpriteUuid, spritename = exportName, layerguid = layerUuid}
 		spritestring = spritestring .. FormatTable(emptyFrameData, data)
@@ -308,7 +384,7 @@ function ExportTag(spriteToExport, from, to, exportName)
 			spriteid = curSpriteUuid, 
 			spritename = exportName, 
 			keyid = string.format("%.1f", i-1), 
-			keylength = string.format("%.1f", 1)
+			keylength = string.format("%.1f", 1),
 		}
 
 		keyframestring = keyframestring .. FormatTable(emptyKeyframeData, keyframedata)
@@ -337,9 +413,9 @@ function ExportTag(spriteToExport, from, to, exportName)
 	spriteFile:close()
 end
 
-yoyoProject = io.open(exportProjectPath, "r");
+yoyoProject = io.open(settings.exportProjectPath, "r");
 if not yoyoProject then
-	local errMsg = string.format(cantOpenYYPMsg, exportProjectPath)
+	local errMsg = string.format(cantOpenYYPMsg, settings.exportProjectPath)
 	app.alert{title=popupName, text = errMsg}
 	return
 end
@@ -349,21 +425,16 @@ yoyoProject:close();
 
 local filesString = ""
 
---[[local dlg = Dialog(popupName)
-dlg:label{text = "Export in progress"}
-dlg:slider{id = progressBar, min = 0, max = #sprCopy.tags, value = 0}
-dlg:modify{id = progressBar, enabled = false};
-dlg:show{wait = false};--]]
-
 function sanitize(str)
-	return str:gsub("[%s]", "_");
+	return str:gsub("[^%w%-]", "_");
 end
+
 
 if #spr.tags > 0 then
 	for i, tag in ipairs(spr.tags) do
-		--[[dlg.data.progressBar = i--]]
-		local tagName = tag.name;
-		local exportTagName = exportSpriteName .. tagName
+		dlg.data.progressBar = i
+		local tagName = sanitize(tag.name);
+		local exportTagName = settings.exportSpriteName .. tagName
 		
 		ExportTag(spr, tag.fromFrame.frameNumber, tag.toFrame.frameNumber, exportTagName)
 
@@ -380,6 +451,8 @@ else
 	return
 end
 
+os.execute(commands)
+
 -- Open .yyp
 do
 	local searchString = '"resources":%s*%['
@@ -392,10 +465,10 @@ do
 		return
 	end
 
-	local exists = string.find(yoyoProjectText, exportSpriteName .. ".yy")
+	local exists = string.find(yoyoProjectText, settings.exportSpriteName .. ".yy")
 
 	if filesString:len() > 0 then
-		testFile = io.open(exportProjectPath, "w+");
+		testFile = io.open(settings.exportProjectPath, "w+");
 
 		local outText = string.sub(yoyoProjectText, 1, searchIndex) .. filesString .. string.sub(yoyoProjectText, searchIndex+1, -1);
 		testFile:write(outText);
