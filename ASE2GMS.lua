@@ -28,8 +28,8 @@ local emptyGMSyy = [[{
   "HTile": false,
   "VTile": false,
   "For3D": false,
-  "width": 128,
-  "height": 128,
+  "width": <<sprwidth>>,
+  "height": <<sprheigth>>,
   "textureGroupId": {
     "name": "Default",
     "path": "texturegroups/Default",
@@ -190,43 +190,7 @@ end
 
 metaLayer.data = exportProjectPath .. ";" .. exportSpriteName
 
--- Open .yyp
-do
-	yoyoProject = io.open(exportProjectPath, "r");
-	if not yoyoProject then
-		local errMsg = string.format(cantOpenYYPMsg, exportProjectPath)
-		app.alert{title=popupName, text = errMsg}
-		return
-	end
 
-	local data = yoyoProject:read("*all");
-	yoyoProject:close();
-
-	local searchString = '"resources":%s*%[(%s*)'
-
-	local _,searchIndex = string.find(data, searchString);
-	local indent = string.match(data, searchString);
-
-	if not searchIndex then
-		local errMsg = cantParseMsg
-		app.alert{title=popupName, text = errMsg}
-		return
-	end
-
-	local exists = string.find(data, exportSpriteName .. ".yy")
-
-	if not exists then
-		local toInsert = '{"id":{"name":"%s","path":"sprites/%s/%s.yy",},"order":0,},'
-		local toInsertFormated = string.format(toInsert, exportSpriteName,exportSpriteName,exportSpriteName);
-
-		testFile = io.open(exportProjectPath, "w+");
-
-		local outText = string.sub(data, 1, searchIndex) .. toInsertFormated .. indent .. string.sub(data, searchIndex+1, -1);
-		testFile:write(outText);
-
-		testFile:close();
-	end
-end
 
 
 function MatchClosingBracket(str, start)
@@ -269,20 +233,28 @@ local function uuid()
     end)
 end
 
--- Create directory structure
-do
-	local gmsRootDir = string.gsub(exportProjectPath, '\\[^\\]*%.yyp', "")
-	local dirPath = gmsRootDir .. "\\sprites\\" .. exportSpriteName;
+local sprCopy = Sprite(spr)
+app.command.FlattenLayers{["visibleOnly"] = "true"}
 
-	local spriteFilepath = dirPath .. "\\" .. exportSpriteName .. ".yy"
+local flattenedLayer = nil
+for _,layer in ipairs(sprCopy.layers) do
+	if (layer.name == "Flattened") then
+		flattenedLayer = layer
+		break;
+	end
+end
+
+-- Create directory structure
+function ExportTag(layer, from, to, exportName)
+	local gmsRootDir = string.gsub(exportProjectPath, '\\[^\\]*%.yyp', "")
+	local dirPath = gmsRootDir .. "\\sprites\\" .. exportName;
+
+	local spriteFilepath = dirPath .. "\\" .. exportName .. ".yy"
 
 	local spriteFile = io.open(spriteFilepath, "r")
 	local originalSpriteContent = "";
 
 	local layerUuid = uuid();
-
-	local sprCopy = Sprite(spr)
-	sprCopy:flatten()
 
 	if false and spriteFile then
 		originalSpriteContent = spriteFile:read("*all");
@@ -290,9 +262,11 @@ do
 		spriteFile = nil;
 	else
 		originalSpriteContent = FormatTable(emptyGMSyy,{
-			spritename = exportSpriteName,
+			spritename = exportName,
 			layerid = layerUuid,
-			sequencelenght = #sprCopy.cels
+			sequencelenght = to-from+1,
+			sprwidth = layer.sprite.width,
+			sprheigth = layer.sprite.height
 		}
 		)
 	end
@@ -307,14 +281,12 @@ do
 
 	-- Copy current sprite and save each frame as a independent frame
 
-
-
 	local spritestring = ""
 	local keyframestring = ""
 
-
-	for i=1,#sprCopy.cels do
-		local cel = sprCopy.cels[i]
+	local count = to-from
+	for i=1,count do
+		local cel = layer.cels[from+i-1]
 		local image = cel.image
 
 		local curSpriteUuid = uuid();
@@ -326,20 +298,18 @@ do
 		os.execute("mkdir " .. WindowsPathEscape(layerOutDir));
 		os.execute("copy /Y " .. WindowsPathEscape(curSpriteOutPath) .. " " .. WindowsPathEscape(layerOutName));
 
-		local data = {spriteguid = curSpriteUuid, spritename = exportSpriteName, layerguid = layerUuid}
+		local data = {spriteguid = curSpriteUuid, spritename = exportName, layerguid = layerUuid}
 		spritestring = spritestring .. FormatTable(emptyFrameData, data)
 
 		local keyframedata = {keyframeid = uuid(),
 			spriteid = curSpriteUuid, 
-			spritename = exportSpriteName, 
+			spritename = exportName, 
 			keyid = string.format("%.1f", i-1), 
 			keylength = string.format("%.1f", 1)
 		}
 
 		keyframestring = keyframestring .. FormatTable(emptyKeyframeData, keyframedata)
 	end
-
-	sprCopy:close();
 
 	newSpriteContent = newSpriteContent .. spritestring .. originalSpriteContent:sub(frameRangeEnd, -1)
 
@@ -364,4 +334,70 @@ do
 	spriteFile:close()
 end
 
+yoyoProject = io.open(exportProjectPath, "r");
+if not yoyoProject then
+	local errMsg = string.format(cantOpenYYPMsg, exportProjectPath)
+	app.alert{title=popupName, text = errMsg}
+	return
+end
+
+local yoyoProjectText = yoyoProject:read("*all");
+yoyoProject:close();
+
+local filesString = ""
+
+--[[local dlg = Dialog(popupName)
+dlg:label{text = "Export in progress"}
+dlg:slider{id = progressBar, min = 0, max = #sprCopy.tags, value = 0}
+dlg:modify{id = progressBar, enabled = false};
+dlg:show{wait = false};--]]
+
+if #sprCopy.tags > 0 then
+	for i, tag in ipairs(sprCopy.tags) do
+		--[[dlg.data.progressBar = i--]]
+		local exportTagName = exportSpriteName .. tag.name
+		
+		ExportTag(flattenedLayer, tag.fromFrame.frameNumber, tag.toFrame.frameNumber, exportTagName)
+
+		local exists = string.find(yoyoProjectText, exportTagName .. ".yy")
+
+		if not exists then
+			local toInsert = '\n    {"id":{"name":"%s","path":"sprites/%s/%s.yy",},"order":0,},'
+			local toInsertFormated = string.format(toInsert, exportTagName,exportTagName,exportTagName);
+			filesString = filesString .. toInsertFormated
+		end
+	end
+else
+	print("can't do file without tags at the moment")
+	return
+end
+
+-- Open .yyp
+do
+	local searchString = '"resources":%s*%['
+
+	local _,searchIndex = string.find(yoyoProjectText, searchString);
+
+	if not searchIndex then
+		local errMsg = cantParseMsg
+		app.alert{title=popupName, text = errMsg}
+		return
+	end
+
+	local exists = string.find(yoyoProjectText, exportSpriteName .. ".yy")
+
+	if filesString:len() > 0 then
+		testFile = io.open(exportProjectPath, "w+");
+
+		local outText = string.sub(yoyoProjectText, 1, searchIndex) .. filesString .. string.sub(yoyoProjectText, searchIndex+1, -1);
+		testFile:write(outText);
+
+		testFile:close();
+	end
+end
+
+sprCopy:close();
+
+
 app.alert{title=popupName, text = "Export done !"}
+
