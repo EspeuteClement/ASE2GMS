@@ -233,19 +233,17 @@ local function uuid()
     end)
 end
 
-local sprCopy = Sprite(spr)
-app.command.FlattenLayers{["visibleOnly"] = "true"}
+local commands = ""
 
-local flattenedLayer = nil
-for _,layer in ipairs(sprCopy.layers) do
-	if (layer.name == "Flattened") then
-		flattenedLayer = layer
-		break;
+function QueueCommand(cmd)
+	if commands:len() > 0 then
+		commands = commands .. " & "
 	end
+	commands = commands .. cmd
 end
 
 -- Create directory structure
-function ExportTag(layer, from, to, exportName)
+function ExportTag(spriteToExport, from, to, exportName)
 	local gmsRootDir = string.gsub(exportProjectPath, '\\[^\\]*%.yyp', "")
 	local dirPath = gmsRootDir .. "\\sprites\\" .. exportName;
 
@@ -256,6 +254,9 @@ function ExportTag(layer, from, to, exportName)
 
 	local layerUuid = uuid();
 
+	local width = spriteToExport.width;
+	local height = spriteToExport.height;
+
 	if false and spriteFile then
 		originalSpriteContent = spriteFile:read("*all");
 		spriteFile:close();
@@ -265,8 +266,8 @@ function ExportTag(layer, from, to, exportName)
 			spritename = exportName,
 			layerid = layerUuid,
 			sequencelenght = to-from+1,
-			sprwidth = layer.sprite.width,
-			sprheigth = layer.sprite.height
+			sprwidth = width,
+			sprheigth = height
 		}
 		)
 	end
@@ -284,10 +285,12 @@ function ExportTag(layer, from, to, exportName)
 	local spritestring = ""
 	local keyframestring = ""
 
-	local count = to-from
+	local image = Image(spriteToExport);
+
+	local count = to-from+1
 	for i=1,count do
-		local cel = layer.cels[from+i-1]
-		local image = cel.image
+		image:clear()
+		image:drawSprite(spriteToExport, from+i-1);
 
 		local curSpriteUuid = uuid();
 		local curSpriteOutPath = dirPath .. "\\" .. curSpriteUuid .. ".png"
@@ -352,12 +355,17 @@ dlg:slider{id = progressBar, min = 0, max = #sprCopy.tags, value = 0}
 dlg:modify{id = progressBar, enabled = false};
 dlg:show{wait = false};--]]
 
-if #sprCopy.tags > 0 then
-	for i, tag in ipairs(sprCopy.tags) do
+function sanitize(str)
+	return str:gsub("[%s]", "_");
+end
+
+if #spr.tags > 0 then
+	for i, tag in ipairs(spr.tags) do
 		--[[dlg.data.progressBar = i--]]
-		local exportTagName = exportSpriteName .. tag.name
+		local tagName = tag.name;
+		local exportTagName = exportSpriteName .. tagName
 		
-		ExportTag(flattenedLayer, tag.fromFrame.frameNumber, tag.toFrame.frameNumber, exportTagName)
+		ExportTag(spr, tag.fromFrame.frameNumber, tag.toFrame.frameNumber, exportTagName)
 
 		local exists = string.find(yoyoProjectText, exportTagName .. ".yy")
 
@@ -395,9 +403,6 @@ do
 		testFile:close();
 	end
 end
-
-sprCopy:close();
-
 
 app.alert{title=popupName, text = "Export done !"}
 
