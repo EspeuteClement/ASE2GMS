@@ -137,17 +137,14 @@ function SettingsToString(settings)
 	return s
 end
 
--- Main Program
+-- Utility functions
+function GetCellCenter(cel)
+	return Point(math.floor(cel.bounds.x + cel.bounds.width/2), math.floor(cel.bounds.y + cel.bounds.width/2));
+end
 
-function Main()
-	math.randomseed( os.time() )
 
-	local spr = app.activeSprite
-
-	if not spr then
-		return
-	end
-
+-- returns metadataLayer, wasLayerCreated
+function GetOrCreateMetadataLayer(spr)
 	-- Check or create metadata layer
 	local metaLayer = nil
 
@@ -171,58 +168,61 @@ function Main()
 
 	metaLayer.color = layersColor
 	metaLayer.stackIndex = 9998
-	--metaLayer.isEditable = false
-	--metaLayer.isVisible = false
 
-	local pivotLayer, hitboxLayer = nil, nil
+	return metaLayer, wasMetaLayerCreated
+end
+
+-- returns a table with the metaInfos
+function GetOrCreateMetaInfo(metaLayer, spr)
+	local infos = {}
 
 	for _, layer in ipairs(metaLayer.layers) do
 		if layer.name == hitboxLayerName then
-			hitboxLayer = layer
+			infos.hitboxLayer = layer
 		end
 
 		if (layer.name == pivotLayerName) then
-			pivotLayer = layer
+			infos.pivotLayer = layer
 		end
 	end
 
-	if not hitboxLayer then
-		hitboxLayer = spr:newLayer()
-		hitboxLayer.name = hitboxLayerName
-		hitboxLayer.parent = metaLayer
-		hitboxLayer.isContinuous = true
-		hitboxLayer.opacity = 127
-		hitboxLayer.color = sublayersColor
+	if not infos.hitboxLayer then
+		infos.hitboxLayer = spr:newLayer()
+		infos.hitboxLayer.name = hitboxLayerName
+		infos.hitboxLayer.parent = metaLayer
+		infos.hitboxLayer.isContinuous = true
+		infos.hitboxLayer.opacity = 127
+		infos.hitboxLayer.color = sublayersColor
 	end
 
-	local hitboxCel = hitboxLayer:cel(1)
-	if not hitboxCel then
-		hitboxCel = spr:newCel(hitboxLayer, 1)
+	infos.hitboxCel = infos.hitboxLayer:cel(1)
+	if not infos.hitboxCel then
+		infos.hitboxCel = spr:newCel(infos.hitboxLayer, 1)
 
 		-- Fill cell with black (full hitbox)
-		for it in hitboxCel.image:pixels() do
+		for it in infos.hitboxCel.image:pixels() do
 			it(app.pixelColor.rgba(0,0,0))
 		end
 	end
 
 
-	if not pivotLayer then
-		pivotLayer = spr:newLayer()
-		pivotLayer.name = pivotLayerName
-		pivotLayer.parent = metaLayer
-		pivotLayer.isContinuous = true
-		pivotLayer.opacity = 127
-		pivotLayer.color = sublayersColor
+	if not infos.pivotLayer then
+		infos.pivotLayer = spr:newLayer()
+		infos.pivotLayer.name = pivotLayerName
+		infos.pivotLayer.parent = metaLayer
+		infos.pivotLayer.isContinuous = true
+		infos.pivotLayer.opacity = 127
+		infos.pivotLayer.color = sublayersColor
 
 	end
 
-	local pivotCel = pivotLayer:cel(1)
-	if not pivotCel then
-		pivotCel = spr:newCel(pivotLayer, 1, Image(5,5, spr.colorMode), Point(-2,-2))
+	infos.pivotCel = infos.pivotLayer:cel(1)
+	if not infos.pivotCel then
+		infos.pivotCel = spr:newCel(infos.pivotLayer, 1, Image(5,5, spr.colorMode), Point(-2,-2))
 
 		-- Draw small cross
 		local color = app.pixelColor.rgba(255,0,0)
-		local img = pivotCel.image;
+		local img = infos.pivotCel.image;
 
 		img:drawPixel(0,2,color)
 		img:drawPixel(1,2,color)
@@ -240,13 +240,11 @@ function Main()
 		img:drawPixel(2,4,color)
 	end
 
+	return infos
+end
 
-	function GetCellCenter(cel)
-		return Point(math.floor(cel.bounds.x + cel.bounds.width/2), math.floor(cel.bounds.y + cel.bounds.width/2));
-	end
-
-	-- Find pivot based on origin layer position
-	local pivotPoint = GetCellCenter(pivotCel);
+function GetPivotId(spr, metaInfos)
+	local pivotPoint = GetCellCenter(metaInfos.pivotCel);
 	local spriteCenter = GetCellCenter(spr);
 	local pivotId = 0;
 
@@ -276,6 +274,49 @@ function Main()
 		pivotId = 9
 	end
 
+	return pivotId
+end
+
+-- Find the bracket that closes the one at 'start' inside str
+function MatchClosingBracket(str, start)
+	local depth = 0;
+	local len = str:len()
+	local posInString = start
+
+	while posInString <= len do
+		local token = str:sub(posInString, posInString)
+
+		if token == '[' then
+			depth = depth + 1;
+		elseif token == ']' then
+			depth = depth - 1;
+			if (depth == 0) then
+				break;
+			end
+		end
+
+		posInString = posInString + 1
+	end
+
+	return posInString;
+end
+
+function Main()
+	math.randomseed( os.time() )
+
+	local spr = app.activeSprite
+
+	if not spr or not app.isUIAvailable then
+		return
+	end
+
+	-- Check or create metadata layer
+	local metaLayer, wasMetaLayerCreated = GetOrCreateMetadataLayer(spr)
+	local metaInfos = GetOrCreateMetaInfo(metaLayer, spr)
+
+	-- Find pivot based on origin layer position
+	local pivotId = GetPivotId(spr, metaInfos);
+
 	app.refresh()
 
 	-- Open filedialog
@@ -285,6 +326,9 @@ function Main()
 		exportOrigin = "0"
 	}
 	settings = StringToSettings(metaLayer.data, settings);
+
+
+	-- Dialog creation
 
 	local dlg = Dialog(popupName)
 
@@ -305,7 +349,7 @@ function Main()
 	end
 
 	function onDebugClicked()
-		local cel = pivotLayer:cel(1)
+		local cel = metaInfos.pivotLayer:cel(1)
 		if cel then
 			print(string.format("x:%d y:%d w:%d h:%d", cel.bounds.x, cel.bounds.y, cel.bounds.width, cel.bounds.height))
 		end
@@ -389,7 +433,7 @@ function Main()
 			yorigin = height
 		end
 
-		pivotCel.position = Point(xorigin - math.floor(pivotCel.bounds.width/2), yorigin - math.floor(pivotCel.bounds.height/2));
+		metaInfos.pivotCel.position = Point(xorigin - math.floor(metaInfos.pivotCel.bounds.width/2), yorigin - math.floor(metaInfos.pivotCel.bounds.height/2));
 	end
 
 	metaLayer.data = SettingsToString(settings)
@@ -401,32 +445,10 @@ function Main()
 	-- Write files to disk
 
 
-	local wasHitboxLayerVisible, wasPivotLayerVisible = hitboxLayer.isVisible, pivotLayer.isVisible
-	hitboxLayer.isVisible, pivotLayer.isVisible = false, false
+	local wasHitboxLayerVisible, wasPivotLayerVisible = metaInfos.hitboxLayer.isVisible, metaInfos.pivotLayer.isVisible
+	metaInfos.hitboxLayer.isVisible, metaInfos.pivotLayer.isVisible = false, false
 
 
-	function MatchClosingBracket(str, start)
-		local depth = 0;
-		local len = str:len()
-		local posInString = start
-
-		while posInString <= len do
-			local token = str:sub(posInString, posInString)
-
-			if token == '[' then
-				depth = depth + 1;
-			elseif token == ']' then
-				depth = depth - 1;
-				if (depth == 0) then
-					break;
-				end
-			end
-
-			posInString = posInString + 1
-		end
-
-		return posInString;
-	end
 
 	function FormatTable(str, t)
 		return str:gsub("<<(%a*)>>", 
@@ -519,8 +541,8 @@ function Main()
 		local originalSpriteContent = "";
 
 
-		local center = GetCellCenter(pivotCel)
-		local bbox = hitboxCel.bounds
+		local center = GetCellCenter(metaInfos.pivotCel)
+		local bbox = metaInfos.hitboxCel.bounds
 
 		if false and spriteFile then
 			originalSpriteContent = spriteFile:read("*all");
@@ -550,7 +572,6 @@ function Main()
 
 		newSpriteContent = originalSpriteContent:sub(1, frameRangeStart) .. "\n"
 
-
 		newSpriteContent = newSpriteContent .. spritestring .. originalSpriteContent:sub(frameRangeEnd, -1)
 
 		originalSpriteContent = newSpriteContent;
@@ -561,7 +582,6 @@ function Main()
 
 
 		newSpriteContent = originalSpriteContent:sub(1, keyframesStart) .. "\n" .. keyframestring .. originalSpriteContent:sub(keyframesEnd, -1)
-
 
 		spriteFile = io.open(spriteFilepath, "w+")
 		if not spriteFile then
@@ -639,7 +659,7 @@ function Main()
 		end
 	end
 
-	hitboxLayer.isVisible, pivotLayer.isVisible = wasHitboxLayerVisible, wasPivotLayerVisible 
+	metaInfos.hitboxLayer.isVisible, metaInfos.pivotLayer.isVisible = wasHitboxLayerVisible, wasPivotLayerVisible 
 
 	app.alert{title=popupName, text = "Export done !"}
 end
