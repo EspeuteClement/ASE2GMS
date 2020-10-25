@@ -1,6 +1,10 @@
 -- Exports Sprite to Gamemaker
 -- Author : Clément Espeute (@valdenthoranar)
 
+-- Templating : this script use a custom templating to replace
+-- content of gamemaker files. These templates are marked with <<template_name>>
+-- and the contents of these templates are replaced using the FormatTable function
+
 -- Constants
 local popupName = "GMS Exporter (Beta)"
 local metaDataLayerName = "__ase2gms"
@@ -137,6 +141,15 @@ function SettingsToString(settings)
 	return s
 end
 
+-- replaces occurences of <<tag>> in str by t[tag]
+function FormatTable(str, t)
+	return str:gsub("<<(%a*)>>", 
+		function(s)
+			return t[s]
+		end
+	)
+end
+
 -- Utility functions
 function GetCellCenter(cel)
 	return Point(math.floor(cel.bounds.x + cel.bounds.width/2), math.floor(cel.bounds.y + cel.bounds.width/2));
@@ -195,14 +208,17 @@ function GetOrCreateMetaInfo(metaLayer, spr)
 		infos.hitboxLayer.color = sublayersColor
 	end
 
+	local savedRange = app.range
+
 	infos.hitboxCel = infos.hitboxLayer:cel(1)
 	if not infos.hitboxCel then
 		infos.hitboxCel = spr:newCel(infos.hitboxLayer, 1)
-
+		local image = infos.hitboxCel.image;
 		-- Fill cell with black (full hitbox)
-		for it in infos.hitboxCel.image:pixels() do
+		for it in image:pixels() do
 			it(app.pixelColor.rgba(0,0,0))
 		end
+
 	end
 
 
@@ -323,12 +339,22 @@ function Main()
 	local settings = {
 		exportProjectPath = nil,
 		exportSpriteName = app.fs.fileTitle(spr.filename),
-		exportOrigin = "0"
+		exportTag = nil
 	}
 	settings = StringToSettings(metaLayer.data, settings);
 
 
 	-- Dialog creation
+
+	local tagStringList = {}
+
+	for _,tag in ipairs(spr.tags) do
+		table.insert(tagStringList,tag.name)
+	end
+
+	if #tagStringList > 0 then
+		table.insert(tagStringList,1, "All");
+	end
 
 	local dlg = Dialog(popupName)
 
@@ -356,6 +382,13 @@ function Main()
 		dlg:close();
 	end
 
+	function onCheckClicked()
+		local useTags = dlg.data.exportTag 
+
+		dlg:modify{id="exportTagList", visible=useTags};
+	end
+
+	dlg:separator{id="sep1",text="Export settings"}
 	dlg:file{	
 				id="exportProjectPath",
 				label="GMS Project", 
@@ -372,6 +405,26 @@ function Main()
 		text=settings.exportSpriteName
 	}
 
+	dlg:check{
+		id="exportTag",
+		label="Export Tags",
+		selected= settings.exportTag and #spr.tags > 0,
+		onclick=onCheckClicked
+	}
+
+	if #spr.tags == 0 then
+		dlg:modify{id="exportTagList", enabled=false};
+	end
+
+	dlg:combobox{
+		id="exportTagList",
+		label="",
+		option=settings.exportTag or "All",
+		options=tagStringList
+	}
+
+	dlg:separator{id="sep2",text="Gamemaker settings"}
+
 	dlg:combobox{
 		id="origin",
 		label="Origin",
@@ -379,7 +432,15 @@ function Main()
 		options=origins
 	}
 
-	dlg:separator{}
+	local bbox = metaInfos.hitboxCel.bounds
+
+	dlg:label{
+		id="collision",
+		label="Collision : ",
+		text=string.format("left: %d right: %d top: %d bot: %d", bbox.x, bbox.y, bbox.x + bbox.width-1, bbox.x + bbox.height-1) 
+	}
+
+	dlg:separator{id="sep3"}
 
 	dlg:button{
 		text = "Export",
@@ -392,6 +453,8 @@ function Main()
 		onclick = onCancelClicked
 	}
 
+	onCheckClicked();
+
 	dlg:show{wait = true}
 
 	if chosenButton == "cancel" then
@@ -403,6 +466,10 @@ function Main()
 
 	settings.exportProjectPath = dlg.data.exportProjectPath
 	settings.exportSpriteName = dlg.data.exportSpriteName
+	settings.exportTag = nil
+	if dlg.data.exportTag and dlg.data.exportTagList then
+		settings.exportTag = dlg.data.exportTagList;
+	end
 
 	for k,v in ipairs(origins) do
 		if v == dlg.data.origin then
@@ -450,13 +517,6 @@ function Main()
 
 
 
-	function FormatTable(str, t)
-		return str:gsub("<<(%a*)>>", 
-			function(s)
-				return t[s]
-			end
-			)
-	end
 
 	local random = math.random
 	local function uuid()
@@ -612,25 +672,34 @@ function Main()
 	end
 
 
-	if #spr.tags > 0 then
+	if #spr.tags > 0 and settings.exportTag then
 		for i, tag in ipairs(spr.tags) do
-			dlg.data.progressBar = i
-			local tagName = sanitize(tag.name);
-			local exportTagName = settings.exportSpriteName .. tagName
-			
-			ExportTag(spr, tag.fromFrame.frameNumber, tag.toFrame.frameNumber, exportTagName)
+			if settings.exportTag == "All" or settings.exportTag == tag.name then
+				local tagName = sanitize(tag.name);
+				local exportTagName = settings.exportSpriteName .. tagName
+				
+				ExportTag(spr, tag.fromFrame.frameNumber, tag.toFrame.frameNumber, exportTagName)
 
-			local exists = string.find(yoyoProjectText, exportTagName .. ".yy")
+				local exists = string.find(yoyoProjectText, exportTagName .. ".yy")
 
-			if not exists then
-				local toInsert = '\n    {"id":{"name":"%s","path":"sprites/%s/%s.yy",},"order":0,},'
-				local toInsertFormated = string.format(toInsert, exportTagName,exportTagName,exportTagName);
-				filesString = filesString .. toInsertFormated
+				if not exists then
+					local toInsert = '\n    {"id":{"name":"%s","path":"sprites/%s/%s.yy",},"order":0,},'
+					local toInsertFormated = string.format(toInsert, exportTagName,exportTagName,exportTagName);
+					filesString = filesString .. toInsertFormated
+				end
 			end
 		end
 	else
-		print("can't do file without tags at the moment")
-		return
+		local exportTagName = settings.exportSpriteName
+
+		ExportTag(spr, 1, #spr.frames, exportTagName)
+		local exists = string.find(yoyoProjectText, exportTagName .. ".yy")
+
+		if not exists then
+			local toInsert = '\n    {"id":{"name":"%s","path":"sprites/%s/%s.yy",},"order":0,},'
+			local toInsertFormated = string.format(toInsert, exportTagName,exportTagName,exportTagName);
+			filesString = filesString .. toInsertFormated
+		end
 	end
 
 	os.execute(commands)
