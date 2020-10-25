@@ -3,9 +3,13 @@
 
 -- Constants
 local popupName = "GMS Exporter (Beta)"
-local metaDataLayerName = "_ase2gms"
-local hitboxLayerName = "hitbox"
-local pivotLayerName = "pivot"
+local metaDataLayerName = "__ase2gms"
+local hitboxLayerName = "Collision"
+local pivotLayerName = "Origin"
+
+local layersColor = Color{r = 0x03, g = 0x9d, b = 0x5b};
+local sublayersColor = Color{r = 0x03, g = 0x9d, b = 0x5b, a = 127};
+
 
 local cantOpenYYPMsg = "Couldn't open project at path %s."
 local cantOpenSpriteYYMsg = "Couldn't open Gamemaker sprite file at path %s."
@@ -24,11 +28,10 @@ local origins = {
 	"Custom"
 }
 
-
 -- Empty GMS .yy file
 
 local emptyGMSyy = [[{
-  "bboxMode": 0,
+  "bboxMode": 2,
   "collisionKind": 1,
   "type": 0,
   "origin": <<exportorigin>>,
@@ -36,10 +39,10 @@ local emptyGMSyy = [[{
   "edgeFiltering": false,
   "collisionTolerance": 0,
   "swfPrecision": 2.525,
-  "bbox_left": 12,
-  "bbox_right": 113,
-  "bbox_top": 14,
-  "bbox_bottom": 127,
+  "bbox_left": <<bboxleft>>,
+  "bbox_right": <<bboxright>>,
+  "bbox_top": <<bboxtop>>,
+  "bbox_bottom": <<bboxbottom>>,
   "HTile": false,
   "VTile": false,
   "For3D": false,
@@ -153,12 +156,14 @@ for _, layer in ipairs(spr.layers) do
 	end
 end
 
+local wasMetaLayerCreated = false
 if not metaLayer then
 	metaLayer = spr:newGroup()
 	metaLayer.name = metaDataLayerName
+	wasMetaLayerCreated = true
 end
 
-metaLayer.color = Color{r = 0x03, g = 0x9d, b = 0x5b};
+metaLayer.color = layersColor
 metaLayer.stackIndex = 9998
 --metaLayer.isEditable = false
 --metaLayer.isVisible = false
@@ -181,6 +186,7 @@ if not hitboxLayer then
 	hitboxLayer.parent = metaLayer
 	hitboxLayer.isContinuous = true
 	hitboxLayer.opacity = 127
+	hitboxLayer.color = sublayersColor
 end
 
 local hitboxCel = hitboxLayer:cel(1)
@@ -200,6 +206,8 @@ if not pivotLayer then
 	pivotLayer.parent = metaLayer
 	pivotLayer.isContinuous = true
 	pivotLayer.opacity = 127
+	pivotLayer.color = sublayersColor
+
 end
 
 local pivotCel = pivotLayer:cel(1)
@@ -226,7 +234,6 @@ if not pivotCel then
 	img:drawPixel(2,4,color)
 end
 
-app.refresh()
 
 function GetCellCenter(cel)
 	return Point(math.floor(cel.bounds.x + cel.bounds.width/2), math.floor(cel.bounds.y + cel.bounds.width/2));
@@ -263,6 +270,7 @@ if pivotId >= 9 then
 	pivotId = 9
 end
 
+app.refresh()
 
 -- Open filedialog
 local settings = {
@@ -278,6 +286,11 @@ local chosenButton = "cancel"
 
 function onExportClicked()
 	chosenButton = "export"
+	dlg:close();
+end
+
+function onSaveClicked()
+	chosenButton = "save"
 	dlg:close();
 end
 
@@ -322,14 +335,21 @@ dlg:button{
 	text = "Export",
 	onclick = onExportClicked
 }:button{
+	text = "Save",
+	onclick = onSaveClicked
+}:button{
 	text = "Cancel",
 	onclick = onCancelClicked
-}:button{
-	text = "Debug",
-	onclick = onDebugClicked
 }
 
 dlg:show{wait = true}
+
+if chosenButton == "cancel" then
+	if (wasMetaLayerCreated) then
+		spr:deleteLayer(metaLayer)
+	end
+	return
+end
 
 settings.exportProjectPath = dlg.data.exportProjectPath
 settings.exportSpriteName = dlg.data.exportSpriteName
@@ -367,7 +387,7 @@ if (pivotId < 9) then
 end
 
 
-if chosenButton ~= "export" then
+if chosenButton == "save" then
 	return
 end
 
@@ -451,6 +471,7 @@ function ExportTag(spriteToExport, from, to, exportName)
 	local layerUuid = uuid();
 
 	local center = GetCellCenter(pivotCel)
+	local bbox = hitboxCel.bounds
 
 	if false and spriteFile then
 		originalSpriteContent = spriteFile:read("*all");
@@ -465,7 +486,11 @@ function ExportTag(spriteToExport, from, to, exportName)
 			sprheigth = height,
 			exportorigin = pivotId,
 			xorigin = center.x,
-			yorigin = center.y
+			yorigin = center.y,
+			bboxleft = bbox.x,
+			bboxright = bbox.x + bbox.width-1,
+			bboxtop = bbox.y,
+			bboxbottom = bbox.y + bbox.height-1,
 		}
 		)
 	end
