@@ -15,6 +15,8 @@ local cantOpenYYPMsg = "Couldn't open project at path %s."
 local cantOpenSpriteYYMsg = "Couldn't open Gamemaker sprite file at path %s."
 local cantParseMsg = "Couldn't parse GameMakerProject. Maybe the file is corrupted ?"
 
+local gmsAnimFPS = 60.0
+
 local origins = {
 	"Top Left",
 	"Top Center",
@@ -62,7 +64,7 @@ local emptyGMSyy = [[{
     "spriteId": {"name":"<<spritename>>","path":"sprites/<<spritename>>/<<spritename>>.yy",},
     "timeUnits": 1,
     "playback": 1,
-    "playbackSpeed": 30.0,
+    "playbackSpeed": <<playbackspeed>>,
     "playbackSpeedType": 0,
     "autoRecord": true,
     "volume": 1.0,
@@ -459,50 +461,16 @@ function ExportTag(spriteToExport, from, to, exportName)
 	if not exportName or exportName:len() < 1 then
 		return
 	end
+	local layerUuid = uuid();
 
 	local gmsRootDir = string.gsub(settings.exportProjectPath, '\\[^\\]*%.yyp', "")
 	local dirPath = gmsRootDir .. "\\sprites\\" .. exportName;
 
 	local spriteFilepath = dirPath .. "\\" .. exportName .. ".yy"
 
-	local spriteFile = io.open(spriteFilepath, "r")
-	local originalSpriteContent = "";
-
-	local layerUuid = uuid();
-
-	local center = GetCellCenter(pivotCel)
-	local bbox = hitboxCel.bounds
-
-	if false and spriteFile then
-		originalSpriteContent = spriteFile:read("*all");
-		spriteFile:close();
-		spriteFile = nil;
-	else
-		originalSpriteContent = FormatTable(emptyGMSyy,{
-			spritename = exportName,
-			layerid = layerUuid,
-			sequencelenght = to-from+1,
-			sprwidth = width,
-			sprheigth = height,
-			exportorigin = pivotId,
-			xorigin = center.x,
-			yorigin = center.y,
-			bboxleft = bbox.x,
-			bboxright = bbox.x + bbox.width-1,
-			bboxtop = bbox.y,
-			bboxbottom = bbox.y + bbox.height-1,
-		}
-		)
-	end
-
 	assert(dirPath:len() > 10, "Fatal error, dirPath was too short, aborting to avoid wiping your computer")
 	os.execute("rmdir /s /q " .. WindowsPathEscape(dirPath));
 	os.execute("mkdir " .. WindowsPathEscape(dirPath));
-
-	local _, frameRangeStart = string.find(originalSpriteContent, '"frames":%s*%[')
-	local frameRangeEnd = MatchClosingBracket(originalSpriteContent, frameRangeStart)
-
-	newSpriteContent = originalSpriteContent:sub(1, frameRangeStart) .. "\n"
 
 	-- Copy current sprite and save each frame as a independent frame
 
@@ -510,7 +478,7 @@ function ExportTag(spriteToExport, from, to, exportName)
 	local keyframestring = ""
 
 	local image = Image(spriteToExport);
-
+	local animTime = 0
 	local count = to-from+1
 	for i=1,count do
 		image:clear()
@@ -528,15 +496,56 @@ function ExportTag(spriteToExport, from, to, exportName)
 		local data = {spriteguid = curSpriteUuid, spritename = exportName, layerguid = layerUuid}
 		spritestring = spritestring .. FormatTable(emptyFrameData, data)
 
+		local length = math.floor(gmsAnimFPS * spriteToExport.frames[from+i-1].duration + 0.5)
+
 		local keyframedata = {keyframeid = uuid(),
 			spriteid = curSpriteUuid, 
 			spritename = exportName, 
-			keyid = string.format("%.1f", i-1), 
-			keylength = string.format("%.1f", 1),
+			keyid = string.format("%.1f", animTime), 
+			keylength = string.format("%.1f", length),
 		}
+
+		animTime = animTime + length
 
 		keyframestring = keyframestring .. FormatTable(emptyKeyframeData, keyframedata)
 	end
+
+
+	local spriteFile = io.open(spriteFilepath, "r")
+	local originalSpriteContent = "";
+
+
+	local center = GetCellCenter(pivotCel)
+	local bbox = hitboxCel.bounds
+
+	if false and spriteFile then
+		originalSpriteContent = spriteFile:read("*all");
+		spriteFile:close();
+		spriteFile = nil;
+	else
+		originalSpriteContent = FormatTable(emptyGMSyy,{
+			spritename = exportName,
+			layerid = layerUuid,
+			sequencelenght = animTime,
+			sprwidth = width,
+			sprheigth = height,
+			exportorigin = pivotId,
+			xorigin = center.x,
+			yorigin = center.y,
+			bboxleft = bbox.x,
+			bboxright = bbox.x + bbox.width-1,
+			bboxtop = bbox.y,
+			bboxbottom = bbox.y + bbox.height-1,
+			playbackspeed = string.format("%.0f",gmsAnimFPS)
+		}
+		)
+	end
+
+	local _, frameRangeStart = string.find(originalSpriteContent, '"frames":%s*%[')
+	local frameRangeEnd = MatchClosingBracket(originalSpriteContent, frameRangeStart)
+
+	newSpriteContent = originalSpriteContent:sub(1, frameRangeStart) .. "\n"
+
 
 	newSpriteContent = newSpriteContent .. spritestring .. originalSpriteContent:sub(frameRangeEnd, -1)
 
@@ -548,6 +557,7 @@ function ExportTag(spriteToExport, from, to, exportName)
 
 
 	newSpriteContent = originalSpriteContent:sub(1, keyframesStart) .. "\n" .. keyframestring .. originalSpriteContent:sub(keyframesEnd, -1)
+
 
 	spriteFile = io.open(spriteFilepath, "w+")
 	if not spriteFile then
