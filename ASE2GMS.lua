@@ -4,6 +4,8 @@
 -- Constants
 local popupName = "GMS Exporter (Beta)"
 local metaDataLayerName = "_ase2gms"
+local hitboxLayerName = "hitbox"
+local pivotLayerName = "pivot"
 
 local cantOpenYYPMsg = "Couldn't open project at path %s."
 local cantOpenSpriteYYMsg = "Couldn't open Gamemaker sprite file at path %s."
@@ -141,22 +143,83 @@ end
 local metaLayer = nil
 
 for _, layer in ipairs(spr.layers) do
-	if layer.name == metaDataLayerName then
-		metaLayer = layer
-		app.activeLayer = metaLayer
+	if layer and layer.name == metaDataLayerName then
+		if not layer.isGroup then
+			spr.deleteLayer(layer)
+		else
+			metaLayer = layer
+		end
 		break;
 	end
 end
 
 if not metaLayer then
-	metaLayer = spr:newLayer()
+	metaLayer = spr:newGroup()
 	metaLayer.name = metaDataLayerName
 end
 
 metaLayer.color = Color{r = 0x03, g = 0x9d, b = 0x5b};
 metaLayer.stackIndex = 9998
-metaLayer.isEditable = false
-metaLayer.isVisible = false
+--metaLayer.isEditable = false
+--metaLayer.isVisible = false
+
+local pivotLayer, hitboxLayer = nil, nil
+
+for _, layer in ipairs(metaLayer.layers) do
+	if layer.name == hitboxLayerName then
+		hitboxLayer = layer
+	end
+
+	if (layer.name == pivotLayerName) then
+		pivotLayer = layer
+	end
+end
+
+if not hitboxLayer then
+	hitboxLayer = spr:newLayer()
+	hitboxLayer.name = hitboxLayerName
+	hitboxLayer.parent = metaLayer
+	hitboxLayer.isContinuous = true
+	hitboxLayer.opacity = 127
+end
+
+local hitboxCel = hitboxLayer:cel(1)
+if not hitboxCel then
+	hitboxCel = spr:newCel(hitboxLayer, 1)
+
+	-- Fill cell with black (full hitbox)
+	for it in hitboxCel.image:pixels() do
+		it(app.pixelColor.rgba(0,0,0))
+	end
+end
+
+
+if not pivotLayer then
+	pivotLayer = spr:newLayer()
+	pivotLayer.name = pivotLayerName
+	pivotLayer.parent = metaLayer
+	pivotLayer.isContinuous = true
+	pivotLayer.opacity = 127
+end
+
+local pivotCel = pivotLayer:cel(1)
+if not pivotCel then
+	pivotCel = spr:newCel(pivotLayer, 1, Image(5,5, spr.colorMode), Point(-2,-2))
+
+	-- Draw small cross
+	local color = app.pixelColor.rgba(255,0,0)
+	local img = pivotCel.image;
+
+	img:drawPixel(0,2,color)
+	img:drawPixel(1,2,color)
+	img:drawPixel(3,2,color)
+	img:drawPixel(4,2,color)
+
+	img:drawPixel(2,0,color)
+	img:drawPixel(2,1,color)
+	img:drawPixel(2,3,color)
+	img:drawPixel(2,4,color)
+end
 
 
 -- Open filedialog
@@ -177,6 +240,14 @@ function onExportClicked()
 end
 
 function onCancelClicked()
+	dlg:close();
+end
+
+function onDebugClicked()
+	local cel = pivotLayer:cel(1)
+	if cel then
+		print(string.format("x:%d y:%d w:%d h:%d", cel.bounds.x, cel.bounds.y, cel.bounds.width, cel.bounds.height))
+	end
 	dlg:close();
 end
 
@@ -211,6 +282,9 @@ dlg:button{
 }:button{
 	text = "Cancel",
 	onclick = onCancelClicked
+}:button{
+	text = "Debug",
+	onclick = onDebugClicked
 }
 
 dlg:show{wait = true}
