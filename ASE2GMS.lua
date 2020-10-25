@@ -21,7 +21,7 @@ local origins = {
 	"Bottom Left",
 	"Bottom Centre",
 	"Bottom Right",
-	"Keep"
+	"Custom"
 }
 
 
@@ -145,7 +145,7 @@ local metaLayer = nil
 for _, layer in ipairs(spr.layers) do
 	if layer and layer.name == metaDataLayerName then
 		if not layer.isGroup then
-			spr.deleteLayer(layer)
+			spr:deleteLayer(layer)
 		else
 			metaLayer = layer
 		end
@@ -215,17 +215,59 @@ if not pivotCel then
 	img:drawPixel(3,2,color)
 	img:drawPixel(4,2,color)
 
+	img:drawPixel(1,1,color)
+	img:drawPixel(1,3,color)
+	img:drawPixel(3,1,color)
+	img:drawPixel(3,3,color)
+
 	img:drawPixel(2,0,color)
 	img:drawPixel(2,1,color)
 	img:drawPixel(2,3,color)
 	img:drawPixel(2,4,color)
 end
 
+app.refresh()
+
+function GetCellCenter(cel)
+	return Point(math.floor(cel.bounds.x + cel.bounds.width/2), math.floor(cel.bounds.y + cel.bounds.width/2));
+end
+
+-- Find pivot based on origin layer position
+local pivotPoint = GetCellCenter(pivotCel);
+local spriteCenter = GetCellCenter(spr);
+local pivotId = 0;
+
+if (pivotPoint.x == 0) then
+	pivotId = pivotId + 0
+elseif (pivotPoint.x == spriteCenter) then
+	pivotId = pivotId + 1
+elseif (pivotPoint.x == spr.bounds.width) then
+	pivotId = pivotId + 2
+else
+	-- Pivot is custom
+	pivotId = 9
+end
+
+if (pivotPoint.y == 0) then
+	pivotId = pivotId + 0
+elseif (pivotPoint.y == spriteCenter) then
+	pivotId = pivotId + 3
+elseif (pivotPoint.y == spr.bounds.height) then
+	pivotId = pivotId + 6
+else
+	-- Pivot is custom
+	pivotId = 9
+end
+
+if pivotId >= 9 then
+	pivotId = 9
+end
+
 
 -- Open filedialog
 local settings = {
 	exportProjectPath = nil,
-	exportSpriteName = spr.filename:match('\\([^\\]*)%..*'),
+	exportSpriteName = app.fs.fileTitle(spr.filename),
 	exportOrigin = "0"
 }
 settings = StringToSettings(metaLayer.data, settings);
@@ -270,7 +312,7 @@ dlg:entry{
 dlg:combobox{
 	id="origin",
 	label="Origin",
-	option=origins[tonumber(settings.exportOrigin)+1],
+	option=origins[pivotId+1],
 	options=origins
 }
 
@@ -294,10 +336,36 @@ settings.exportSpriteName = dlg.data.exportSpriteName
 
 for k,v in ipairs(origins) do
 	if v == dlg.data.origin then
-		settings.exportOrigin = "" .. k - 1
+		pivotId = k - 1
 		break;
 	end
 end
+
+local width = spr.width;
+local height = spr.height;
+
+local xorigin, yorigin = 0, 0
+
+if (pivotId < 9) then
+	if pivotId % 3 == 0 then
+		xorigin = 0
+	elseif pivotId % 3 == 1 then
+		xorigin = math.floor(width/2)
+	else
+		xorigin = width
+	end
+
+	if math.floor(pivotId/3) == 0 then
+		yorigin = 0
+	elseif math.floor(pivotId/3) == 1 then
+		yorigin = math.floor(height/2)
+	else
+		yorigin = height
+	end
+
+	pivotCel.position = Point(xorigin - math.floor(pivotCel.bounds.width/2), yorigin - math.floor(pivotCel.bounds.height/2));
+end
+
 
 if chosenButton ~= "export" then
 	return
@@ -307,7 +375,8 @@ end
 
 metaLayer.data = SettingsToString(settings)
 
-
+local wasHitboxLayerVisible, wasPivotLayerVisible = hitboxLayer.isVisible, pivotLayer.isVisible
+hitboxLayer.isVisible, pivotLayer.isVisible = false, false
 
 
 function MatchClosingBracket(str, start)
@@ -381,27 +450,7 @@ function ExportTag(spriteToExport, from, to, exportName)
 
 	local layerUuid = uuid();
 
-	local width = spriteToExport.width;
-	local height = spriteToExport.height;
-
-
-	local xorigin, yorigin = 0, 0
-	local origin = tonumber(settings.exportOrigin)
-	if origin % 3 == 0 then
-		xorigin = 0
-	elseif origin % 3 == 1 then
-		xorigin = math.floor(width/2)
-	else
-		xorigin = width
-	end
-
-	if math.floor(origin/3) == 0 then
-		yorigin = 0
-	elseif math.floor(origin/3) == 1 then
-		yorigin = math.floor(height/2)
-	else
-		yorigin = height
-	end
+	local center = GetCellCenter(pivotCel)
 
 	if false and spriteFile then
 		originalSpriteContent = spriteFile:read("*all");
@@ -414,9 +463,9 @@ function ExportTag(spriteToExport, from, to, exportName)
 			sequencelenght = to-from+1,
 			sprwidth = width,
 			sprheigth = height,
-			exportorigin = settings.exportOrigin,
-			xorigin = xorigin,
-			yorigin = yorigin
+			exportorigin = pivotId,
+			xorigin = center.x,
+			yorigin = center.y
 		}
 		)
 	end
@@ -550,6 +599,8 @@ do
 		testFile:close();
 	end
 end
+
+hitboxLayer.isVisible, pivotLayer.isVisible = wasHitboxLayerVisible, wasPivotLayerVisible 
 
 app.alert{title=popupName, text = "Export done !"}
 
