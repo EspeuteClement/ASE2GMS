@@ -475,7 +475,7 @@ function Main()
 	dlg:label{
 		id="collision",
 		label="Collision : ",
-		text=string.format("left: %d right: %d top: %d bot: %d", bbox.x, bbox.y, bbox.x + bbox.width-1, bbox.x + bbox.height-1) 
+		text=string.format("left: %d right: %d top: %d bot: %d", bbox.x, bbox.x + bbox.width-1, bbox.y, bbox.y + bbox.height-1) 
 	}
 
 	dlg:separator{id="sep3"}
