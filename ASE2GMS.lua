@@ -141,7 +141,7 @@ function SettingsToString(settings)
 	return s
 end
 
--- replaces occurences of <<tag>> in str by t[tag]
+-- replaces occurrences of <<tag>> in str by t[tag]
 function FormatTable(str, t)
 	return str:gsub("<<(%a*)>>", 
 		function(s)
@@ -566,8 +566,7 @@ function Main()
 		local spriteFilepath = dirPath .. "\\" .. exportName .. ".yy"
 
 		assert(dirPath:len() > 10, "Fatal error, dirPath was too short, aborting to avoid wiping your computer")
-		os.execute("rmdir /s /q " .. WindowsPathEscape(dirPath));
-		os.execute("mkdir " .. WindowsPathEscape(dirPath));
+		os.execute("rmdir /s /q " .. WindowsPathEscape(dirPath) .. " & mkdir " .. WindowsPathEscape(dirPath));
 
 		-- Copy current sprite and save each frame as a independent frame
 
