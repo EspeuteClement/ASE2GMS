@@ -547,9 +547,17 @@ function Main()
 		commands = commands .. cmd
 	end
 
-	function WindowsPathEscape(str)
-		return str:gsub("/","\\");
+	-- Not 100% safe but good enough
+	function IsValidPath(str)
+		return str:find('([^%*%?"<>|\r\n])\'') == nil
 	end
+
+	function WindowsPathEscape(str)
+		assert(IsValidPath(str), string.format("Error, invalid path %s", str))
+		return '"'..str:gsub("/","\\")..'"'
+	end
+
+
 
 	-- Create directory structure
 	function ExportTag(spriteToExport, from, to, exportName)
@@ -560,10 +568,10 @@ function Main()
 		end
 		local layerUuid = uuid();
 
-		local gmsRootDir = string.gsub(settings.exportProjectPath, '\\[^\\]*%.yyp', "")
-		local dirPath = gmsRootDir .. "\\sprites\\" .. exportName;
+		local gmsRootDir = app.fs.filePath(settings.exportProjectPath);
+		local dirPath = app.fs.joinPath(app.fs.joinPath(gmsRootDir, "sprites"), exportName);
 
-		local spriteFilepath = dirPath .. "\\" .. exportName .. ".yy"
+		local spriteFilepath = app.fs.joinPath(dirPath, exportName .. ".yy");
 
 		assert(dirPath:len() > 10, "Fatal error, dirPath was too short, aborting to avoid wiping your computer")
 		os.execute("rmdir /s /q " .. WindowsPathEscape(dirPath) .. " & mkdir " .. WindowsPathEscape(dirPath));
