@@ -317,6 +317,31 @@ function MatchClosingBracket(str, start)
 	return posInString;
 end
 
+function SetPivotPoint(pivotId, metaInfos, spr)
+	
+	if (pivotId < 9) then
+		local xorigin, yorigin = 0, 0
+
+		if pivotId % 3 == 0 then
+			xorigin = 0
+		elseif pivotId % 3 == 1 then
+			xorigin = math.floor(spr.width/2)
+		else
+			xorigin = spr.width
+		end
+
+		if math.floor(pivotId/3) == 0 then
+			yorigin = 0
+		elseif math.floor(pivotId/3) == 1 then
+			yorigin = math.floor(spr.height/2)
+		else
+			yorigin = spr.height
+		end
+
+		metaInfos.pivotCel.position = Point(xorigin - math.floor(metaInfos.pivotCel.bounds.width/2), yorigin - math.floor(metaInfos.pivotCel.bounds.height/2));
+	end
+end
+
 function Main()
 	math.randomseed( os.time() )
 
@@ -388,6 +413,18 @@ function Main()
 		dlg:modify{id="exportTagList", visible=useTags};
 	end
 
+	function onPivotChange()
+		for k,v in ipairs(origins) do
+			if v == dlg.data.origin then
+				pivotId = k - 1
+				break;
+			end
+		end
+
+		SetPivotPoint(pivotId, metaInfos, spr);
+		app.refresh()
+	end
+
 	dlg:separator{id="sep1",text="Export settings"}
 	dlg:file{	
 				id="exportProjectPath",
@@ -420,7 +457,7 @@ function Main()
 		id="exportTagList",
 		label="",
 		option=settings.exportTag or "All",
-		options=tagStringList
+		options=tagStringList,
 	}
 
 	dlg:separator{id="sep2",text="Gamemaker settings"}
@@ -429,7 +466,8 @@ function Main()
 		id="origin",
 		label="Origin",
 		option=origins[pivotId+1],
-		options=origins
+		options=origins,
+		onchange=onPivotChange
 	}
 
 	local bbox = metaInfos.hitboxCel.bounds
@@ -467,41 +505,17 @@ function Main()
 	settings.exportProjectPath = dlg.data.exportProjectPath
 	settings.exportSpriteName = dlg.data.exportSpriteName
 	settings.exportTag = nil
+	
 	if dlg.data.exportTag and dlg.data.exportTagList then
 		settings.exportTag = dlg.data.exportTagList;
 	end
 
-	for k,v in ipairs(origins) do
-		if v == dlg.data.origin then
-			pivotId = k - 1
-			break;
-		end
-	end
+	onPivotChange()
+
 
 	local width = spr.width;
 	local height = spr.height;
 
-	local xorigin, yorigin = 0, 0
-
-	if (pivotId < 9) then
-		if pivotId % 3 == 0 then
-			xorigin = 0
-		elseif pivotId % 3 == 1 then
-			xorigin = math.floor(width/2)
-		else
-			xorigin = width
-		end
-
-		if math.floor(pivotId/3) == 0 then
-			yorigin = 0
-		elseif math.floor(pivotId/3) == 1 then
-			yorigin = math.floor(height/2)
-		else
-			yorigin = height
-		end
-
-		metaInfos.pivotCel.position = Point(xorigin - math.floor(metaInfos.pivotCel.bounds.width/2), yorigin - math.floor(metaInfos.pivotCel.bounds.height/2));
-	end
 
 	metaLayer.data = SettingsToString(settings)
 
@@ -514,9 +528,6 @@ function Main()
 
 	local wasHitboxLayerVisible, wasPivotLayerVisible = metaInfos.hitboxLayer.isVisible, metaInfos.pivotLayer.isVisible
 	metaInfos.hitboxLayer.isVisible, metaInfos.pivotLayer.isVisible = false, false
-
-
-
 
 	local random = math.random
 	local function uuid()
