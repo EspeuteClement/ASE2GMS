@@ -289,8 +289,6 @@ function GetPivotId(spr, metaInfos)
 		pivotId = 9
 	end
 
-	print(pivotPoint.x .. " " .. pivotPoint.y .. " " .. pivotId)
-
 	return pivotId
 end
 
