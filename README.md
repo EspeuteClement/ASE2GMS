@@ -2,6 +2,8 @@
 
 This is a work in progress extension for Aseprite that allows you to export sprites directly into the Gamemaker Studio 2 engine, version 2.3.0.529. 
 
+![Screenshot of the extension](doc/Screenshot01.png.jpg?raw=true "ASE2GMS")
+
 **Important notice : This script is very likely to break with Gamemaker Studio 2 versions other than 2.3.0.529. Please use caution**
 
 **This script is in beta and could corrupt your Gamemaker projects. Be sure to ALWAYS have backups of your projects, or use versionning software**
