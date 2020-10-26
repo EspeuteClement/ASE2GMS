@@ -266,7 +266,7 @@ function GetPivotId(spr, metaInfos)
 
 	if (pivotPoint.x == 0) then
 		pivotId = pivotId + 0
-	elseif (pivotPoint.x == spriteCenter) then
+	elseif (pivotPoint.x == spriteCenter.x) then
 		pivotId = pivotId + 1
 	elseif (pivotPoint.x == spr.bounds.width) then
 		pivotId = pivotId + 2
@@ -274,10 +274,9 @@ function GetPivotId(spr, metaInfos)
 		-- Pivot is custom
 		pivotId = 9
 	end
-
 	if (pivotPoint.y == 0) then
 		pivotId = pivotId + 0
-	elseif (pivotPoint.y == spriteCenter) then
+	elseif (pivotPoint.y == spriteCenter.y) then
 		pivotId = pivotId + 3
 	elseif (pivotPoint.y == spr.bounds.height) then
 		pivotId = pivotId + 6
@@ -289,6 +288,8 @@ function GetPivotId(spr, metaInfos)
 	if pivotId >= 9 then
 		pivotId = 9
 	end
+
+	print(pivotPoint.x .. " " .. pivotPoint.y .. " " .. pivotId)
 
 	return pivotId
 end
@@ -318,24 +319,25 @@ function MatchClosingBracket(str, start)
 end
 
 function SetPivotPoint(pivotId, metaInfos, spr)
-	
+	local spriteCenter = GetCellCenter(spr);
+
 	if (pivotId < 9) then
 		local xorigin, yorigin = 0, 0
 
 		if pivotId % 3 == 0 then
 			xorigin = 0
 		elseif pivotId % 3 == 1 then
-			xorigin = math.floor(spr.width/2)
+			xorigin = spriteCenter.x
 		else
-			xorigin = spr.width
+			xorigin = spr.bounds.width
 		end
 
 		if math.floor(pivotId/3) == 0 then
 			yorigin = 0
 		elseif math.floor(pivotId/3) == 1 then
-			yorigin = math.floor(spr.height/2)
+			yorigin = spriteCenter.y
 		else
-			yorigin = spr.height
+			yorigin = spr.bounds.height
 		end
 
 		metaInfos.pivotCel.position = Point(xorigin - math.floor(metaInfos.pivotCel.bounds.width/2), yorigin - math.floor(metaInfos.pivotCel.bounds.height/2));
