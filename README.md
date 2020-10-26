@@ -1,4 +1,4 @@
-# Aseprite to Game maker studio 2 exporter
+# Aseprite to Gamemaker Studio 2 exporter
 
 This is a work in progress extension for Aseprite that allows you to export sprites directly into the Gamemaker Studio 2 engine, version 2.3.0.529. 
 
