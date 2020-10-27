@@ -433,7 +433,6 @@ function Main()
 				filename=settings.exportProjectPath, 
 				filetypes={"yyp"},
 				entry=false,
-				focus=true
 			}
 
 	dlg:entry{
@@ -449,16 +448,16 @@ function Main()
 		onclick=onCheckClicked
 	}
 
-	if #spr.tags == 0 then
-		dlg:modify{id="exportTagList", enabled=false};
-	end
-
 	dlg:combobox{
 		id="exportTagList",
 		label="",
 		option=settings.exportTag or "All",
 		options=tagStringList,
 	}
+
+	if #spr.tags == 0 then
+		dlg:modify{id="exportTag", enabled=false};
+	end
 
 	dlg:separator{id="sep2",text="Gamemaker settings"}
 
@@ -482,7 +481,8 @@ function Main()
 
 	dlg:button{
 		text = "Export",
-		onclick = onExportClicked
+		onclick = onExportClicked,
+		focus = true
 	}:button{
 		text = "Save",
 		onclick = onSaveClicked
@@ -518,6 +518,10 @@ function Main()
 
 
 	metaLayer.data = SettingsToString(settings)
+
+	if spr.filename and spr.filename:len() > 0 then
+		spr:saveAs(spr.filename);
+	end
 
 	if chosenButton == "save" then
 		return
@@ -751,4 +755,4 @@ function Main()
 	app.alert{title=popupName, text = "Export done !"}
 end
 
-Main()
+app.transaction(Main)
