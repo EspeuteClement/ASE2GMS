@@ -16,9 +16,9 @@ This is a work in progress extension for Aseprite that allows you to export spri
 * Export all your tags into separate Gamemaker sprites in one step, or choose the one you want to export
 
 ## Installation
-1. Download ASE2GMS.lua
+1. Download ASE2GMS.lua and json.notlua
 2. Open Aseprite and go to File > Scripts > Open Scripts Folder
-3. Place the ASE2GMS.lua file in there
+3. Place the two files in there
 4. Click the File > Script > Rescan Script Folders
 5. You shoud now have File > Scripts > ASE2GMS
 
@@ -34,3 +34,6 @@ The Origin will be set as the center of the first frame of the Origin layer. A l
 
 The Collision works in a similar way. The collision of your sprite is calculated using the bounding box of the first frame of the Collision layer. You can edit the bounding box by resizing that frame with the Rectangular Marquee Tool. You can check the bounding box by pressing Ctrl above the sprite, a blue rectangle outline should appear.
 
+## Code info
+
+The `json.notlua` file is just named that way so it can be imported from our script without having Aseprite thinking it's a script. It's a proper lua file otherwise.
