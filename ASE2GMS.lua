@@ -5,7 +5,7 @@
 -- content of gamemaker files. These templates are marked with <<template_name>>
 -- and the contents of these templates are replaced using the FormatTable function
 
-local json = dofile('.sjon.lua');
+local json = dofile('.ase2gmsjson.lua');
 
 -- Constants
 local popupName = "GMS Exporter (Beta)"
